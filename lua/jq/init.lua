@@ -121,11 +121,6 @@ function M.view_file(filename)
 end
 
 M.setup = function()
-  if vim.fn.executable("jq") == 0 then
-    log_err("'jq' not available, please install it and add it to your PATH")
-    return
-  end
-
   vim.api.nvim_create_user_command("JQ", function(opts)
     local filename = opts.args ~= "" and opts.args or nil
     M.view_file(filename)
