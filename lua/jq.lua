@@ -33,51 +33,45 @@ local buffers = {
   },
 }
 
+---@param msg string
+local function log_err(msg)
+  vim.notify(msg, vim.log.levels.ERROR)
+end
+
 ---@class jq.Result
 ---@field lines string[]|nil
----@field error_msg string[]|nil
+---@field error_msg string|nil
 
 ---@param filename string
 ---@param expression string
 ---@return jq.Result
-local function get_lines(filename, expression)
+local function call_jq(filename, expression)
   local res = vim.system({ "jq", expression, filename }, nil):wait()
 
   if res.stderr and res.stderr ~= "" then
-    local stderr_msg = string.match(res.stderr, "^jq: .-error: (.*)$") or res.stderr
-    return { lines = nil, error_msg = vim.split(stderr_msg, "\n") }
+    return { lines = nil, error_msg = res.stderr }
   end
 
   return { lines = vim.split(res.stdout, "\n"), error_msg = nil }
 end
 
 local function render_output()
-  local res = get_lines(state.input.filename, state.input.expression)
+  local jq_res = call_jq(state.input.filename, state.input.expression)
 
-  state.input.error_msg = res.error_msg
-  state.output.lines = res.lines or state.output.lines
-
-  vim.bo[state.output.buf].modifiable = true
-  vim.api.nvim_buf_set_lines(state.output.buf, 0, -1, false, state.output.lines or {})
-  vim.bo[state.output.buf].modifiable = false
-
-  local input_lines
-  if res.error_msg then
-    input_lines = { state.input.expression, "" }
-    vim.list_extend(input_lines, res.error_msg)
-  else
-    input_lines = { state.input.expression }
+  if jq_res.error_msg then
+    log_err(jq_res.error_msg)
+    return
   end
 
-  vim.api.nvim_buf_set_lines(state.input.buf, 0, -1, false, input_lines)
-  vim.bo[state.input.buf].modified = false
+  vim.bo[state.output.buf].modifiable = true
+  vim.api.nvim_buf_set_lines(state.output.buf, 0, -1, false, jq_res.lines or {})
+  vim.bo[state.output.buf].modifiable = false
 end
 
 local function get_input()
-  local lines = vim.api.nvim_buf_get_lines(state.input.buf, 0, 1, false)
+  local lines = vim.api.nvim_buf_get_lines(state.input.buf, 0, -1, false)
   local joined = table.concat(lines, "\n")
   state.input.expression = joined
-  vim.bo[state.input.buf].modified = false
 end
 
 local function setup_bufs()
@@ -97,21 +91,23 @@ local function setup_bufs()
 
   vim.cmd("tabnew")
 
-  -- setup output window
   local output_win = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(output_win, state.output.buf)
 
-  -- setup input window
   vim.cmd("split")
   local input_win = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(input_win, state.input.buf)
   vim.api.nvim_win_set_height(input_win, 9)
+
+  vim.api.nvim_buf_set_lines(state.input.buf, 0, -1, false, { state.input.expression })
+  vim.bo[state.input.buf].modified = false
 
   vim.api.nvim_create_autocmd("BufWriteCmd", {
     buffer = state.input.buf,
     callback = function()
       get_input()
       render_output()
+      vim.bo[state.input.buf].modified = false
     end,
   })
 end
@@ -126,7 +122,7 @@ end
 
 M.setup = function()
   if vim.fn.executable("jq") == 0 then
-    vim.notify("'jq' not available, please install it and add it to your PATH", vim.log.levels.ERROR)
+    log_err("'jq' not available, please install it and add it to your PATH")
     return
   end
 
