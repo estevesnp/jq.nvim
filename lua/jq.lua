@@ -113,7 +113,7 @@ local function setup_bufs()
 end
 
 ---@param filename? string
-function M.open_windows(filename)
+function M.view_file(filename)
   state.input.filename = filename and vim.fs.abspath(filename) or vim.fn.expand("%:p")
 
   setup_bufs()
@@ -128,7 +128,7 @@ M.setup = function()
 
   vim.api.nvim_create_user_command("JQ", function(opts)
     local filename = opts.args ~= "" and opts.args or nil
-    M.open_windows(filename)
+    M.view_file(filename)
   end, {
     nargs = "?",
     desc = "Run JQ on file",
