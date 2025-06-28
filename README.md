@@ -17,11 +17,11 @@ with [lazy](https://github.com/folke/lazy.nvim) package manager:
     -- these are the default values
     require("jq").setup({
 
-      -- options: "up" | "down"
-      jq_input_pos = "up",
-
       -- options: "tab" | "left" | "right"
-      jq_output_pos = "right",
+      buffer_pos = "right",
+
+      -- options: "up" | "down"
+      input_pos = "up",
 
       -- default 'jq' query when opening input buffer
       default_expression = ".",
@@ -29,6 +29,15 @@ with [lazy](https://github.com/folke/lazy.nvim) package manager:
 
     -- if you want a key bind using the lua API
     vim.keymap.set("n", "<leader>jq", require("jq").view_file)
+
+    -- or if you want to pass certain options only for a keybind
+    vim.keymap.set("n", "<leader>jt", function()
+      require("jq").view_file({
+        buffer_pos = "tab",
+        input_pos = "down",
+      })
+    end)
+
   end
 }
 ```

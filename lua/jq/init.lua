@@ -1,7 +1,7 @@
 local M = {}
 
+---@alias jq.JqBufferPos "tab" | "left" | "right"
 ---@alias jq.JqInputPos "up" | "down"
----@alias jq.JqOutputPos "tab" | "left" | "right"
 
 local jq_pos_table = {
   input = {
@@ -16,14 +16,14 @@ local jq_pos_table = {
 }
 
 ---@class jq.Config
----@field jq_input_pos jq.JqInputPos?
----@field jq_output_pos jq.JqOutputPos?
+---@field buffer_pos jq.JqBufferPos?
+---@field input_pos jq.JqInputPos?
 ---@field default_expression string?
 
 ---@type jq.Config
 local config = {
-  jq_input_pos = "up",
-  jq_output_pos = "right",
+  buffer_pos = "right",
+  input_pos = "up",
   default_expression = ".",
 }
 
@@ -101,7 +101,10 @@ local function get_input()
   state.input.expression = joined
 end
 
-local function setup_bufs()
+---@param opts jq.ViewFileOpts?
+local function setup_bufs(opts)
+  opts = opts or {}
+
   for buf_name, buf_config in pairs(buffers) do
     if state[buf_name].buf == nil or not vim.api.nvim_buf_is_valid(state[buf_name].buf) then
       local buf = vim.api.nvim_create_buf(false, true)
@@ -117,17 +120,17 @@ local function setup_bufs()
   end
 
   -- output buf
-  vim.cmd(jq_pos_table.output[config.jq_output_pos])
+  vim.cmd(jq_pos_table.output[opts.buffer_pos or config.buffer_pos])
   local output_win = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(output_win, state.output.buf)
 
   -- input buf
-  vim.cmd(jq_pos_table.input[config.jq_input_pos])
+  vim.cmd(jq_pos_table.input[opts.input_pos or config.input_pos])
   local input_win = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(input_win, state.input.buf)
   vim.api.nvim_win_set_height(input_win, 9)
 
-  vim.api.nvim_buf_set_lines(state.input.buf, 0, -1, false, { state.input.expression })
+  vim.api.nvim_buf_set_lines(state.input.buf, 0, -1, false, { opts.default_expression or config.default_expression })
   vim.bo[state.input.buf].modified = false
 
   vim.api.nvim_create_autocmd("BufWriteCmd", {
@@ -140,11 +143,28 @@ local function setup_bufs()
   })
 end
 
----@param filename? string
-function M.view_file(filename)
-  state.input.filename = filename and vim.fs.abspath(filename) or vim.fn.expand("%:p")
+---@class jq.ViewFileOpts
+---@field filename string?
+---@field buffer_pos jq.JqBufferPos?
+---@field input_pos jq.JqInputPos?
+---@field default_expression string?
 
-  setup_bufs()
+---@param opts jq.ViewFileOpts?
+function M.view_file(opts)
+  opts = opts or {}
+  state.input.filename = opts.filename and vim.fs.abspath(opts.filename) or vim.fn.expand("%:p")
+
+  if opts.input_pos and jq_pos_table.input[opts.input_pos] == nil then
+    log_err("invalid input buffer position: " .. opts.input_pos)
+    return
+  end
+
+  if opts.buffer_pos and jq_pos_table.output[opts.buffer_pos] == nil then
+    log_err("invalid output buffer position: " .. opts.buffer_pos)
+    return
+  end
+
+  setup_bufs(opts)
   render_output()
 end
 
