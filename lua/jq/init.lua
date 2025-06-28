@@ -1,5 +1,32 @@
 local M = {}
 
+---@alias jq.JqInputPos "up" | "down"
+---@alias jq.JqOutputPos "tab" | "left" | "right"
+
+local jq_pos_table = {
+  input = {
+    up = "split",
+    down = "split | wincmd j",
+  },
+  output = {
+    right = "vsplit | wincmd l",
+    left = "vsplit",
+    tab = "tabnew",
+  },
+}
+
+---@class jq.Config
+---@field jq_input_pos jq.JqInputPos?
+---@field jq_output_pos jq.JqOutputPos?
+---@field default_expression string?
+
+---@type jq.Config
+local config = {
+  jq_input_pos = "up",
+  jq_output_pos = "right",
+  default_expression = ".",
+}
+
 local state = {
   input = {
     buf = nil,
@@ -89,12 +116,13 @@ local function setup_bufs()
     end
   end
 
-  vim.cmd("tabnew")
-
+  -- output buf
+  vim.cmd(jq_pos_table.output[config.jq_output_pos])
   local output_win = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(output_win, state.output.buf)
 
-  vim.cmd("split")
+  -- input buf
+  vim.cmd(jq_pos_table.input[config.jq_input_pos])
   local input_win = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(input_win, state.input.buf)
   vim.api.nvim_win_set_height(input_win, 9)
@@ -120,14 +148,12 @@ function M.view_file(filename)
   render_output()
 end
 
-M.setup = function()
-  vim.api.nvim_create_user_command("JQ", function(opts)
-    local filename = opts.args ~= "" and opts.args or nil
-    M.view_file(filename)
-  end, {
-    nargs = "?",
-    desc = "Run JQ on file",
-  })
+---@param cfg jq.Config?
+function M.setup(cfg)
+  if cfg then
+    config = vim.tbl_extend("force", config, cfg)
+  end
+  state.input.expression = config.default_expression
 end
 
 return M
