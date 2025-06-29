@@ -46,6 +46,8 @@ with [lazy](https://github.com/folke/lazy.nvim) package manager:
 
 use either the `:JQ` command or the lua API with an optional filename (uses current file as default)
 
+you can also pass options to the user command, like `:JQ buffer_pos=left input_pos=down ../foo.json`
+
 this will open a new tab with a buffer for your `jq` query and a buffer with the result being rendered
 
 update the query and then save the buffer to re-render the output
