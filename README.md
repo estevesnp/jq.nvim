@@ -23,6 +23,9 @@ with [lazy](https://github.com/folke/lazy.nvim) package manager:
       -- options: "up" | "down"
       input_pos = "up",
 
+      -- options: uint > 0
+      input_height = 5,
+
       -- default 'jq' query when opening input buffer
       default_expression = ".",
     })
@@ -35,6 +38,7 @@ with [lazy](https://github.com/folke/lazy.nvim) package manager:
       require("jq").view_file({
         buffer_pos = "tab",
         input_pos = "down",
+        input_height = 10,
       })
     end)
 

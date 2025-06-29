@@ -18,12 +18,15 @@ local jq_pos_table = {
 ---@class jq.Config
 ---@field buffer_pos jq.JqBufferPos?
 ---@field input_pos jq.JqInputPos?
+---@field input_height uinteger?
 ---@field default_expression string?
 
+--- default config values
 ---@type jq.Config
 local config = {
   buffer_pos = "right",
   input_pos = "up",
+  input_height = 5,
   default_expression = ".",
 }
 
@@ -120,17 +123,17 @@ local function setup_bufs(opts)
   end
 
   -- output buf
-  vim.cmd(jq_pos_table.output[opts.buffer_pos or config.buffer_pos])
+  vim.cmd(jq_pos_table.output[opts.buffer_pos])
   local output_win = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(output_win, state.output.buf)
 
   -- input buf
-  vim.cmd(jq_pos_table.input[opts.input_pos or config.input_pos])
+  vim.cmd(jq_pos_table.input[opts.input_pos])
   local input_win = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(input_win, state.input.buf)
-  vim.api.nvim_win_set_height(input_win, 9)
+  vim.api.nvim_win_set_height(input_win, opts.input_height)
 
-  vim.api.nvim_buf_set_lines(state.input.buf, 0, -1, false, { opts.default_expression or config.default_expression })
+  vim.api.nvim_buf_set_lines(state.input.buf, 0, -1, false, { opts.default_expression })
   vim.bo[state.input.buf].modified = false
 
   vim.api.nvim_create_autocmd("BufWriteCmd", {
@@ -143,24 +146,36 @@ local function setup_bufs(opts)
   })
 end
 
+---@param height any
+---@return boolean
+local function is_valid_height(height)
+  return type(height) == "number" and height % 1 == 0 and height > 0
+end
+
 ---@class jq.ViewFileOpts
 ---@field filename string?
 ---@field buffer_pos jq.JqBufferPos?
 ---@field input_pos jq.JqInputPos?
+---@field input_height uinteger?
 ---@field default_expression string?
 
 ---@param opts jq.ViewFileOpts?
 function M.view_file(opts)
-  opts = opts or {}
+  opts = vim.tbl_extend("force", config, opts)
   state.input.filename = opts.filename and vim.fs.abspath(opts.filename) or vim.fn.expand("%:p")
 
-  if opts.input_pos and jq_pos_table.input[opts.input_pos] == nil then
+  if jq_pos_table.output[opts.buffer_pos] == nil then
+    log_err("invalid output buffer position: " .. opts.buffer_pos)
+    return
+  end
+
+  if jq_pos_table.input[opts.input_pos] == nil then
     log_err("invalid input buffer position: " .. opts.input_pos)
     return
   end
 
-  if opts.buffer_pos and jq_pos_table.output[opts.buffer_pos] == nil then
-    log_err("invalid output buffer position: " .. opts.buffer_pos)
+  if not is_valid_height(opts.input_height) then
+    log_err("invalid input buffer height: " .. opts.input_height)
     return
   end
 
