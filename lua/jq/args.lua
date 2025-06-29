@@ -28,10 +28,17 @@ local function left_trim_unsafe(str, prefix)
   return str:sub(#prefix + 1)
 end
 
+---@param str string
+---@param prefix string
+---@return boolean
+local function starts_and_extends(str, prefix)
+  return starts_with(str, prefix) and left_trim_unsafe(str, prefix) ~= ""
+end
+
 ---@param needle string
 ---@param haystack string[]
 ---@return boolean
-local function contains(needle, haystack)
+local function list_contains(haystack, needle)
   for _, v in ipairs(haystack) do
     if needle == v then
       return true
@@ -59,7 +66,7 @@ function M.parse_args(args)
         return nil
       end
       buffer_pos = left_trim_unsafe(arg, BUFFER_EQ)
-      if not contains(buffer_pos, BUFFER_VALS) then
+      if not list_contains(BUFFER_VALS, buffer_pos) then
         log_err("invalid value for buffer_pos: " .. buffer_pos)
         return nil
       end
@@ -69,7 +76,7 @@ function M.parse_args(args)
         return nil
       end
       input_pos = left_trim_unsafe(arg, INPUT_EQ)
-      if not contains(input_pos, INPUT_VALS) then
+      if not list_contains(INPUT_VALS, input_pos) then
         log_err("invalid value for input_pos: " .. input_pos)
         return nil
       end
@@ -90,17 +97,39 @@ function M.parse_args(args)
 end
 
 ---@param arg_lead string
+---@param args string
 ---@return string[]
-function M.complete(arg_lead)
+function M.complete(arg_lead, args)
+  local arg_list = vim.split(args, "%s+")
+
   local candidates = {}
   local results = {}
 
-  for _, val in ipairs(BUFFER_VALS) do
-    table.insert(candidates, BUFFER_EQ .. val)
+  local buf_given = false
+  local input_given = false
+
+  -- check if '{buffer|input}_pos=' exists with a value
+  -- so we can add suggestions only if no values are present
+  for _, arg in ipairs(arg_list) do
+    if not buf_given and starts_and_extends(arg, BUFFER_EQ) then
+      buf_given = true
+    end
+
+    if not input_given and starts_and_extends(arg, INPUT_EQ) then
+      input_given = true
+    end
   end
 
-  for _, val in ipairs(INPUT_VALS) do
-    table.insert(candidates, INPUT_EQ .. val)
+  if not buf_given then
+    for _, val in ipairs(BUFFER_VALS) do
+      table.insert(candidates, BUFFER_EQ .. val)
+    end
+  end
+
+  if not input_given then
+    for _, val in ipairs(INPUT_VALS) do
+      table.insert(candidates, INPUT_EQ .. val)
+    end
   end
 
   for _, candidate in ipairs(candidates) do
@@ -108,6 +137,9 @@ function M.complete(arg_lead)
       table.insert(results, candidate)
     end
   end
+
+  -- add filesystem completions
+  vim.list_extend(results, vim.fn.getcompletion(arg_lead, "file"))
 
   return results
 end
