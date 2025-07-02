@@ -3,19 +3,6 @@ local M = {}
 ---@alias jq.JqBufferPos "tab" | "left" | "right" | "inplace"
 ---@alias jq.JqInputPos "up" | "down"
 
-local jq_pos_table = {
-  input = {
-    up = "split",
-    down = "split | wincmd j",
-  },
-  output = {
-    right = "vsplit | wincmd l",
-    left = "vsplit",
-    tab = "tabnew",
-    inplace = "",
-  },
-}
-
 ---@class jq.Config
 ---@field buffer_pos jq.JqBufferPos?
 ---@field input_pos jq.JqInputPos?
@@ -31,18 +18,20 @@ local config = {
   default_expression = ".",
 }
 
-local state = {
+local jq_pos_table = {
   input = {
-    buf = nil,
-    expression = ".",
-    filename = nil,
+    up = "split",
+    down = "split | wincmd j",
   },
   output = {
-    buf = nil,
+    right = "vsplit | wincmd l",
+    left = "vsplit",
+    tab = "tabnew",
+    inplace = "",
   },
 }
 
-local buffers = {
+local buffer_configurations = {
   input = {
     kv = {
       buftype = "acwrite",
@@ -86,71 +75,101 @@ local function call_jq(filename, expression)
   return { lines = vim.split(res.stdout, "\n"), error_msg = nil }
 end
 
-local function render_output()
-  local jq_res = call_jq(state.input.filename, state.input.expression)
+---@param filename string
+---@param expression string
+---@param output_buf number
+local function render_output(filename, expression, output_buf)
+  local jq_res = call_jq(filename, expression)
 
   if jq_res.error_msg then
     log_err(jq_res.error_msg)
     return
   end
 
-  vim.bo[state.output.buf].modifiable = true
-  vim.api.nvim_buf_set_lines(state.output.buf, 0, -1, false, jq_res.lines or {})
-  vim.bo[state.output.buf].modifiable = false
+  vim.bo[output_buf].modifiable = true
+  vim.api.nvim_buf_set_lines(output_buf, 0, -1, false, jq_res.lines or {})
+  vim.bo[output_buf].modifiable = false
 end
 
-local function get_input()
-  local lines = vim.api.nvim_buf_get_lines(state.input.buf, 0, -1, false)
-  local joined = table.concat(lines, "\n")
-  state.input.expression = joined
+---@param input_buf number
+---@return string
+local function get_input(input_buf)
+  local lines = vim.api.nvim_buf_get_lines(input_buf, 0, -1, false)
+  return table.concat(lines, "\n")
 end
 
----@param opts jq.ViewFileOpts?
+---@class jq.Bufs
+---@field input number
+---@field output number
+
+---@param opts jq.ViewFileOpts
+---@return jq.Bufs
 local function setup_bufs(opts)
-  opts = opts or {}
+  local bufs = {}
 
-  for buf_name, buf_config in pairs(buffers) do
-    if state[buf_name].buf == nil or not vim.api.nvim_buf_is_valid(state[buf_name].buf) then
-      local buf = vim.api.nvim_create_buf(false, true)
+  for buf_name, buf_config in pairs(buffer_configurations) do
+    local buf = vim.api.nvim_create_buf(false, true)
 
-      for key, value in pairs(buf_config.kv) do
-        vim.bo[buf][key] = value
-      end
-
-      state[buf_name].buf = buf
-
-      vim.api.nvim_buf_set_name(buf, buf_config.name)
+    for key, value in pairs(buf_config.kv) do
+      vim.bo[buf][key] = value
     end
+
+    bufs[buf_name] = buf
+
+    vim.api.nvim_buf_set_name(buf, opts.filename .. " - " .. buf_config.name)
   end
 
   -- output buf
   vim.cmd(jq_pos_table.output[opts.buffer_pos])
   local output_win = vim.api.nvim_get_current_win()
-  vim.api.nvim_win_set_buf(output_win, state.output.buf)
+  vim.api.nvim_win_set_buf(output_win, bufs.output)
 
   -- input buf
   vim.cmd(jq_pos_table.input[opts.input_pos])
   local input_win = vim.api.nvim_get_current_win()
-  vim.api.nvim_win_set_buf(input_win, state.input.buf)
+  vim.api.nvim_win_set_buf(input_win, bufs.input)
   vim.api.nvim_win_set_height(input_win, opts.input_height)
 
-  vim.api.nvim_buf_set_lines(state.input.buf, 0, -1, false, { opts.default_expression })
-  vim.bo[state.input.buf].modified = false
+  vim.api.nvim_buf_set_lines(bufs.input, 0, -1, false, { opts.default_expression })
+  vim.bo[bufs.input].modified = false
 
   vim.api.nvim_create_autocmd("BufWriteCmd", {
-    buffer = state.input.buf,
+    buffer = bufs.input,
     callback = function()
-      get_input()
-      render_output()
-      vim.bo[state.input.buf].modified = false
+      local expression = get_input(bufs.input)
+      render_output(opts.filename, expression, bufs.output)
+      vim.bo[bufs.input].modified = false
     end,
   })
+
+  return bufs
 end
 
 ---@param height any
 ---@return boolean
 local function is_valid_height(height)
   return type(height) == "number" and height % 1 == 0 and height > 0
+end
+
+---@param opts jq.ViewFileOpts
+---@return boolean
+local function validate_opts(opts)
+  if jq_pos_table.output[opts.buffer_pos] == nil then
+    log_err("invalid output buffer position: " .. opts.buffer_pos)
+    return false
+  end
+
+  if jq_pos_table.input[opts.input_pos] == nil then
+    log_err("invalid input buffer position: " .. opts.input_pos)
+    return false
+  end
+
+  if not is_valid_height(opts.input_height) then
+    log_err("invalid input buffer height: " .. opts.input_height)
+    return false
+  end
+
+  return true
 end
 
 ---@class jq.ViewFileOpts
@@ -162,26 +181,17 @@ end
 
 ---@param opts jq.ViewFileOpts?
 function M.view_file(opts)
+  opts = opts or {}
+
   opts = vim.tbl_extend("force", config, opts)
-  state.input.filename = opts.filename and vim.fs.abspath(opts.filename) or vim.fn.expand("%:p")
+  opts.filename = opts.filename and vim.fs.abspath(opts.filename) or vim.fn.expand("%:p")
 
-  if jq_pos_table.output[opts.buffer_pos] == nil then
-    log_err("invalid output buffer position: " .. opts.buffer_pos)
+  if not validate_opts(opts) then
     return
   end
 
-  if jq_pos_table.input[opts.input_pos] == nil then
-    log_err("invalid input buffer position: " .. opts.input_pos)
-    return
-  end
-
-  if not is_valid_height(opts.input_height) then
-    log_err("invalid input buffer height: " .. opts.input_height)
-    return
-  end
-
-  setup_bufs(opts)
-  render_output()
+  local bufs = setup_bufs(opts)
+  render_output(opts.filename, opts.default_expression, bufs.output)
 end
 
 ---@param cfg jq.Config?
@@ -189,7 +199,6 @@ function M.setup(cfg)
   if cfg then
     config = vim.tbl_extend("force", config, cfg)
   end
-  state.input.expression = config.default_expression
 end
 
 return M
