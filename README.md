@@ -28,6 +28,10 @@ with [lazy](https://github.com/folke/lazy.nvim) package manager:
 
       -- default 'jq' query when opening input buffer
       default_expression = ".",
+
+      -- how errors are displayed
+      -- options: "message" | "output"
+      display_error = "message",
     })
 
     -- if you want a key bind using the lua API
@@ -39,6 +43,7 @@ with [lazy](https://github.com/folke/lazy.nvim) package manager:
         buffer_pos = "tab",
         input_pos = "down",
         input_height = 10,
+        display_error = "output",
       })
     end)
 

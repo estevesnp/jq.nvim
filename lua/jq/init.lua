@@ -2,12 +2,14 @@ local M = {}
 
 ---@alias jq.JqBufferPos "tab" | "left" | "right" | "inplace"
 ---@alias jq.JqInputPos "up" | "down"
+---@alias jq.DisplayError "message" | "output"
 
 ---@class jq.Config
 ---@field buffer_pos jq.JqBufferPos?
 ---@field input_pos jq.JqInputPos?
 ---@field input_height uinteger?
 ---@field default_expression string?
+---@field display_error jq.DisplayError?
 
 --- default config values
 ---@type jq.Config
@@ -16,6 +18,7 @@ local config = {
   input_pos = "up",
   input_height = 5,
   default_expression = ".",
+  display_error = "message",
 }
 
 local jq_pos_table = {
@@ -78,16 +81,19 @@ end
 ---@param filename string
 ---@param expression string
 ---@param output_buf number
-local function render_output(filename, expression, output_buf)
+---@param display_error jq.DisplayError
+local function render_output(filename, expression, output_buf, display_error)
   local jq_res = call_jq(filename, expression)
 
-  if jq_res.error_msg then
+  if jq_res.error_msg and display_error == "message" then
     log_err(jq_res.error_msg)
     return
   end
 
+  local output = jq_res.lines or vim.split(jq_res.error_msg, "\n")
+
   vim.bo[output_buf].modifiable = true
-  vim.api.nvim_buf_set_lines(output_buf, 0, -1, false, jq_res.lines or {})
+  vim.api.nvim_buf_set_lines(output_buf, 0, -1, false, output)
   vim.bo[output_buf].modifiable = false
 end
 
@@ -137,7 +143,7 @@ local function setup_bufs(opts)
     buffer = bufs.input,
     callback = function()
       local expression = get_input(bufs.input)
-      render_output(opts.filename, expression, bufs.output)
+      render_output(opts.filename, expression, bufs.output, opts.display_error)
       vim.bo[bufs.input].modified = false
     end,
   })
@@ -152,24 +158,21 @@ local function is_valid_height(height)
 end
 
 ---@param opts jq.ViewFileOpts
----@return boolean
+---@return string? err_msg
 local function validate_opts(opts)
   if jq_pos_table.output[opts.buffer_pos] == nil then
-    log_err("invalid output buffer position: " .. opts.buffer_pos)
-    return false
+    return "invalid output buffer position: " .. opts.buffer_pos
   end
 
   if jq_pos_table.input[opts.input_pos] == nil then
-    log_err("invalid input buffer position: " .. opts.input_pos)
-    return false
+    return "invalid input buffer position: " .. opts.input_pos
   end
 
   if not is_valid_height(opts.input_height) then
-    log_err("invalid input buffer height: " .. opts.input_height)
-    return false
+    return "invalid input buffer height: " .. opts.input_height
   end
 
-  return true
+  return nil
 end
 
 ---@class jq.ViewFileOpts
@@ -178,6 +181,7 @@ end
 ---@field input_pos jq.JqInputPos?
 ---@field input_height uinteger?
 ---@field default_expression string?
+---@field display_error jq.DisplayError?
 
 ---@param opts jq.ViewFileOpts?
 function M.view_file(opts)
@@ -186,12 +190,14 @@ function M.view_file(opts)
   opts = vim.tbl_extend("force", config, opts)
   opts.filename = opts.filename and vim.fs.abspath(opts.filename) or vim.fn.expand("%:p")
 
-  if not validate_opts(opts) then
+  local err_msg = validate_opts(opts)
+  if err_msg then
+    log_err(err_msg)
     return
   end
 
   local bufs = setup_bufs(opts)
-  render_output(opts.filename, opts.default_expression, bufs.output)
+  render_output(opts.filename, opts.default_expression, bufs.output, opts.display_error)
 end
 
 ---@param cfg jq.Config?
