@@ -4,7 +4,7 @@ local BUFFER_EQ = "buffer_pos="
 local INPUT_EQ = "input_pos="
 
 ---@type jq.JqBufferPos[]
-local BUFFER_VALS = { "right", "left", "tab" }
+local BUFFER_VALS = { "right", "left", "tab", "inplace" }
 
 ---@type jq.JqInputPos[]
 local INPUT_VALS = { "up", "down" }

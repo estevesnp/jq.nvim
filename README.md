@@ -17,7 +17,7 @@ with [lazy](https://github.com/folke/lazy.nvim) package manager:
     -- these are the default values
     require("jq").setup({
 
-      -- options: "tab" | "left" | "right"
+      -- options: "tab" | "left" | "right" | "inplace"
       buffer_pos = "right",
 
       -- options: "up" | "down"

@@ -1,6 +1,6 @@
 local M = {}
 
----@alias jq.JqBufferPos "tab" | "left" | "right"
+---@alias jq.JqBufferPos "tab" | "left" | "right" | "inplace"
 ---@alias jq.JqInputPos "up" | "down"
 
 local jq_pos_table = {
@@ -12,6 +12,7 @@ local jq_pos_table = {
     right = "vsplit | wincmd l",
     left = "vsplit",
     tab = "tabnew",
+    inplace = "",
   },
 }
 
