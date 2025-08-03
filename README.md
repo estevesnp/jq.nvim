@@ -2,6 +2,14 @@
 
 a [jq](https://github.com/jqlang/jq) visualizer inside nvim
 
+## flags
+
+to pass a flag, add -- between the flags and the program. example:
+
+```
+-s -- map(select(.foo == "bar"))
+```
+
 ## instalation
 
 requires [jq](https://github.com/jqlang/jq) to be accessible through your path

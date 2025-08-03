@@ -1,5 +1,7 @@
 local M = {}
 
+local jq_args = require("jq.args")
+
 ---@alias jq.JqBufferPos "tab" | "left" | "right" | "inplace"
 ---@alias jq.JqInputPos "up" | "down"
 ---@alias jq.DisplayError "message" | "output"
@@ -61,15 +63,31 @@ local function log_err(msg)
   vim.notify(msg, vim.log.levels.ERROR)
 end
 
+---@param filename string
+---@param program jq.Program
+---@return string[]
+local function build_args(filename, program)
+  local args = { "jq" }
+  if program.flags then
+    for _, flag in ipairs(program.flags) do
+      table.insert(args, flag)
+    end
+  end
+
+  table.insert(args, program.program)
+  table.insert(args, filename)
+  return args
+end
+
 ---@class jq.Result
 ---@field lines string[]|nil
 ---@field error_msg string|nil
 
 ---@param filename string
----@param expression string
+---@param program jq.Program
 ---@return jq.Result
-local function call_jq(filename, expression)
-  local res = vim.system({ "jq", expression, filename }, nil):wait()
+local function call_jq(filename, program)
+  local res = vim.system(build_args(filename, program), nil):wait()
 
   if res.stderr and res.stderr ~= "" then
     return { lines = nil, error_msg = res.stderr }
@@ -83,7 +101,12 @@ end
 ---@param output_buf number
 ---@param display_error jq.DisplayError
 local function render_output(filename, expression, output_buf, display_error)
-  local jq_res = call_jq(filename, expression)
+  local program = jq_args.parse_program(expression)
+  if program == nil then
+    return
+  end
+
+  local jq_res = call_jq(filename, program)
 
   if jq_res.error_msg and display_error == "message" then
     log_err(jq_res.error_msg)

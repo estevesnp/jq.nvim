@@ -35,6 +35,19 @@ local function starts_and_extends(str, prefix)
   return starts_with(str, prefix) and left_trim_unsafe(str, prefix) ~= ""
 end
 
+---@param input string
+---@param sep string
+---@return string, string?
+local function split_first(input, sep)
+  local start_pos, end_pos = input:find(sep, 1, true)
+  if not start_pos then
+    return input, nil
+  end
+  local before = input:sub(1, start_pos - 1)
+  local after = input:sub(end_pos + 1)
+  return before, after
+end
+
 ---@param needle string
 ---@param haystack string[]
 ---@return boolean
@@ -45,6 +58,22 @@ local function list_contains(haystack, needle)
     end
   end
   return false
+end
+
+---@param flags_string string
+---@return string[]
+local function get_flags(flags_string)
+  if #flags_string == 0 then
+    return {}
+  end
+
+  local flags = {}
+
+  for flag in flags_string:gmatch("%S+") do
+    table.insert(flags, flag)
+  end
+
+  return flags
 end
 
 ---@class jq.Args
@@ -142,6 +171,53 @@ function M.complete(arg_lead, args)
   vim.list_extend(results, vim.fn.getcompletion(arg_lead, "file"))
 
   return results
+end
+
+function M.starts_with_flag(input)
+  local trimmed = input:gsub("^%s*", "")
+  local len = #trimmed
+
+  if len < 2 or trimmed:sub(1, 1) ~= "-" then
+    return false
+  end
+
+  local second = trimmed:sub(2, 2)
+
+  if second == " " then
+    return false
+  end
+
+  if second == "-" then
+    if len == 2 or trimmed:sub(3, 3) == " " then
+      return false
+    end
+  end
+
+  return true
+end
+
+---@class jq.Program
+---@field flags string[]?
+---@field program string
+
+--- parse program args from input box
+---@param input string
+---@return jq.Program | nil
+function M.parse_program(input)
+  local starts_with_flag = M.starts_with_flag(input)
+
+  if not starts_with_flag then
+    return { program = input }
+  end
+
+  local left, right = split_first(input, " -- ")
+
+  if right == nil then
+    log_err("when using flags, separate them from the program with --")
+    return nil
+  end
+
+  return { flags = get_flags(left), program = right }
 end
 
 return M
