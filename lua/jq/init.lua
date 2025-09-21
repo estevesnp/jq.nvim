@@ -43,6 +43,7 @@ local buffer_configurations = {
       bufhidden = "wipe",
       swapfile = false,
       modifiable = true,
+      filetype = "jq",
     },
     name = "jq-expression",
   },
