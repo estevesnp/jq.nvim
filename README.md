@@ -17,6 +17,12 @@ requires [jq](https://github.com/jqlang/jq) to be accessible through your path
 with [lazy](https://github.com/folke/lazy.nvim) package manager:
 
 ```lua
+{ "estevesnp/jq.nvim" }
+```
+
+the settings can also be configured (note: these are the default values):
+
+```lua
 {
   "estevesnp/jq.nvim",
   config = function()
